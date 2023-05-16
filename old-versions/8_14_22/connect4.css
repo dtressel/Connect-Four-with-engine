@@ -1,0 +1,285 @@
+body {
+  background-color: rgb(189, 189, 189);
+}
+
+/* game board table */
+#board {
+  border-spacing: 0;
+  padding: 15px;
+  margin: 0;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: rgb(237, 235, 235);
+  border-radius: 2%;
+}
+
+h1 {
+  text-align: center;
+  font-family: 'Secular One', sans-serif;
+}
+
+/* color classes for heading text */
+.red {
+  color: red;
+}
+
+.yellow {
+  color: yellow;
+}
+
+/* sets size of table cells
+position set to relative to allow placement of pieces inside cell */
+#board td {
+  margin: 0;
+  padding: 0;
+  width: 52px;
+  height: 52px;
+  position: relative;
+}
+
+/* divs placed in empty-div that creates blue game board */
+.game-board-div {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: auto;
+  width: 75%;
+  height: 75%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 20px blue;
+  position: absolute;
+  border: 3px solid rgb(67, 67, 255);
+  z-index: 1;
+}
+
+/* in each td is empty-div (with same size as td) that has overflow: hidden and contains game-board-div */
+/* also in the td will be the piece div */
+.empty-div{
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* pieces are divs within game table cells: draw as colored circles */
+.piece {
+  /* first 5 properties center the piece in cell */
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: auto;
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  position: absolute;
+  pointer-events: none; /* to avoid infinite nesting of hover pieces */
+}
+
+/* Below are all the fall animations for all possible fall heights. fall5 is the fall
+animation for an empty column and fall0 is the fall animation for an almost full column */
+.fall5 {
+  top: -624px;
+  animation: fall5 .5s linear 1 0s forwards;
+}
+
+@keyframes fall5 {
+  0% {
+    top: -624px;
+  }
+  8% {
+    top: -500px;
+  }
+  15% {
+    top: -360px;
+  }
+  22% {
+    top: -195px;
+  }
+  29% {
+    top: 0;
+  }
+  45% {
+    top: -180px;
+  }
+  60% {
+    top: 0;
+  }
+  73% {
+    top: -80px;
+  }
+  85% {
+    top: 0;
+  }
+  93% {
+    top: -30px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+.fall4 {
+  top: -520px;
+  animation: fall4 .42s linear 1 0s forwards;
+}
+
+@keyframes fall4 {
+  0% {
+    top: -520px;
+  }
+  10% {
+    top: -410px;
+  }
+  20% {
+    top: -290px;
+  }
+  30% {
+    top: -155px;
+  }
+  40% {
+    top: 0;
+  }
+  60% {
+    top: -100px;
+  }
+  75% {
+    top: 0;
+  }
+  90% {
+    top: -35px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+.fall3 {
+  top: -416px;
+  animation: fall3 .35s linear 1 0s forwards;
+}
+
+@keyframes fall3 {
+  0% {
+    top: -416px;
+  }
+  12% {
+    top: -330px;
+  }
+  24% {
+    top: -230px;
+  }
+  37% {
+    top: -122px;
+  }
+  50% {
+    top: 0;
+  }
+  65% {
+    top: -80px;
+  }
+  80% {
+    top: 0;
+  }
+  90% {
+    top: -30px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+.fall2 {
+  top: -312px;
+  animation: fall2 .3s linear 1 0s forwards;
+}
+
+@keyframes fall2 {
+  0% {
+    top: -312px;
+  }
+  17% {
+    top: -222px;
+  }
+  34% {
+    top: -120px;
+  }
+  50% {
+    top: 0;
+  }
+  65% {
+    top: -70px;
+  }
+  80% {
+    top: 0;
+  }
+  90% {
+    top: -25px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+.fall1 {
+  top: -208px;
+  animation: fall1 .25s linear 1 0s forwards;
+}
+
+@keyframes fall1 {
+  0% {
+    top: -208px;
+  }
+  30% {
+    top: -115px;
+  }
+  60% {
+    top: 0;
+  }
+  83% {
+    top: -50px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+.fall0 {
+  top: -104px;
+  animation: fall0 .1s linear 1 0s forwards;
+}
+
+@keyframes fall0 {
+  0% {
+    top: -104px;
+  }
+  35% {
+    top: -58px;
+  }
+  70% {
+    top: 0;
+  }
+  85% {
+    top: -10px;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+/* Sets the color of player 1 and 2 pieces */
+.p1 {
+  background-color: yellow;
+}
+
+.p2 {
+  background-color: red;
+}
+
+/* column-top is table row of clickable areas for each column */
+#column-top td {
+  border: dashed 1px lightgray;
+}
+
+/* old td:hover has been replaced by javascript hover effects */

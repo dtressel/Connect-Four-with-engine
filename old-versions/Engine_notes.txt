@@ -1,0 +1,68 @@
+Connect Four Engine:
+
+Base level of evalTree always needs to be hard coded
+Don't reference path of anything other than current branch
+
+* Use recursion to set up variable number of nested loops
+
+Things to include in each instance of evaluation tree branch:
+1. local evaluation: the score that the evaluation function gives that position in isolation
+2. inherited evaluation: the score that the position inherits from later moves
+2a. tie-breaker evalation?
+3. broken pot array: an array of pots broken by that particular move:
+	- the list can be compiled with lists on earlier instances and the global broken pot array, which contains
+	  that info for the current position on the board
+	- I'll have to be careful to include pots that are broken from redandancies and implement that correctly.
+3a. need player 1 claimed pots (array)
+3b. need player 2 claimed pots (array)
+4. piece placement value: show the placement and color of move made on that move
+5. previous move placement value
+6. move counter: a value that helps computer figure out how many levels back it needs to search for upcoming methods.
+7. game won: 0 = no, 1 = won by p1, 2 = won by p2
+8. column full: true or false
+9. method that compiles broken pots (reduce method), accumulator changes level
+10. method that compiles board object (reduce method), accumulator changes level
+11. method that finds relevant pots influenced by that move
+12. method that makes list of each players assets
+13. method that calculates local score
+14. method that passes the local score down the tree if it is a relevant score
+15. method that creates an array of the path
+
+global methods:
+1. use reduce method to find where to start evaluating: accumulator gets changed to new level once it sees
+   that current level exists
+
+Has to be aware of what positions are accessible.
+
+create spotObj (an obj of objs of objs)):
+contains Ids (each an object itself):
+
+0 10 20 30 40 50 60
+1 11 21 31 41 51 61	 
+2 12 22 32 42 52 62	
+3 13 23 33 43 53 63
+4 14 24 34 44 54 64
+5 15 25 35 45 55 65
+
+data objects:
+1. board status Object (key(cell ID): 0(empty), 1(occupied by p1), 2(p2)
+2. Pot Array
+3. Player objects: Contains
+
+each Id object has:
+occupiedBy: 0 = empty, 1 = player1, 2 = player2
+accessible: true or false
+vertPot (obj):		claimed by: 0 , 1 = player, 2 = player2
+horPot (obj):	all:	broken: true or false
+diagPot (obj):		numClaimed: 0, 1, 2, 3, 4 (function)
+revdiag Pot (obj):	spotsEmpty: arr of spot IDs (function) 
+
+Add to array the current number in each column that is accessible.
+When piece is placed in that column the number is subtracted by 1.
+
+store two arrays with all number spots that each color has. 
+
+Maybe store a list of all potential connect 4s for each color, and
+how close that color is towards completing that connect four.
+Could have 1, 2, or 3 spots: 1 would be 1 point, 2 would be 2 points, 
+3 would be e points?
