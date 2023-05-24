@@ -164,18 +164,19 @@ class verticalEval {
   */
   constructor(posId) {
     this.posId = posId;
-    // this.columnIds = this.getColumnsIds();
-    this.columnEvals = this.getcolumnEvals();
   }
 
   EvaluateAll() {
     // create a column posId for each column
     let columnIds = this.getColumnsIds();
     // get an Evaluation object from each vertical
+    const columnEvals = []; 
     for (let i = 0; i < columnIds.length; i++) {
-      let columnEval = EvaluateOne(columnIds[i], i);
+      columnEvals.push(EvaluateOne(columnIds[i], i));
     }
-
+    // combine into single object
+    const columnEvalObj = combineColumnEvals(columnEvals);
+    return columnEvalObj;
   }
 
   getColumnIds(posId) {
@@ -192,7 +193,21 @@ class verticalEval {
   }
 
   EvaluateOne(columnId, xPos) {
+    /* Returns an object:
+        {
+          player: <0, 1, or 2>
+          score: <score> *optional
+          flag: <1, 2, or 3> *optional
+          threeCompletionSpot: <xPos><yPos> *optional
+          CSDeductions: {
+            _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+          }
+          win: <true> *optional
+        } 
+    */
     let topMostChain = {player: 0, yPosOfTopPiece: rows - 1};
+
+    // Loop through all characters in ColumnId (last character first)
     for (i = columnId.length - 1; i >= 0; i--) {
       // check top space
       if (columnId[i] < 'h') {
@@ -237,29 +252,103 @@ class verticalEval {
         }
       }
     }
+
     // check if completion possible
     if ((4 - topMostChain.numInARow + topMostChain.yPosOfTopPiece) >= rows) {
       // 'player: 0' will indicate a column with no score for either players
       // either because of an empty column or a column with no potential win
       return {player: 0};
     }
+
     // Build Return Object
     let returnObj;
     if (topMostChain.numInARow === 4) {
       returnObj = {...lineScoreKey._4};
+      returnObj.win = true;
+    } else if (topMostChain.numInARow === 3) {
+      returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
+      returnObj.threeCompletionSpot = `${xPos}${topMostChain.yPosOfTopPiece + 1}`;
     } else {
       returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
     }
     returnObj.player = topMostChain.player;
-    if (returnObj.three) {
-      returnObj.completionSpot = `${xPos}${topMostChain.yPosOfTopPiece + 1}`;
-    } else {
+    returnObj.CSDeductions = {};
+    if (!returnObj.threeCompletionSpot) {
       // find required spots and change in score if one is another's completion spot
       for (let i = 1; i <= 4 - topMostChain.numInARow; i++) {
-        returnObj[`_${xPos}${topMostChain.yPosOfTopPiece + i}`] = -returnObj.score;
+        returnObj.CSDeductions[`_${xPos}${topMostChain.yPosOfTopPiece + i}`] = -returnObj.score;
       }
     }
+
     return returnObj;
+  }
+
+  combineColumnEvals(evals) {
+    /* 
+      returns obj:
+        {
+          player1: {
+            score: 0,
+            flags: [],
+            threeCompletionSpots: [],
+            CSDeductions: [],
+            win: <true> *optional
+          },
+          player2: {
+            score: 0,
+            flags: [],
+            threeCompletionSpots: [],
+            CSDeductions: [],
+            win: <true> *optional
+          }
+        } 
+    */
+    const evalObj = {
+      player1: {
+        score: 0,
+        flags: [],
+        threeCompletionSpots: [],
+        CSDeductions: {},
+      },
+      player2: {
+        score: 0,
+        flags: [],
+        threeCompletionSpots: [],
+        CSDeductions: {},
+      }
+    }
+    for (eval of evals) {
+      if (eval.player === 1) {
+        evalObj.player1.score += eval.score;
+        if (eval.flag) {
+          evalObj.player1.flags.push(eval.flag);
+        }
+        if (eval.threeCompletionSpot) {
+          evalObj.player1.threeCompletionSpots;
+        }
+        for (spot in eval.CSDeductions) {
+          evalObj.player1.CSDeductions.spot = eval.CSDeductions[spot];
+        }
+        if (eval.win) {
+          evalObj.player1.win = true;
+        }
+      } else if (eval.player === 2) {
+        evalObj.player2.score += eval.score;
+        if (eval.flag) {
+          evalObj.player2.flags.push(eval.flag);
+        }
+        if (eval.threeCompletionSpot) {
+          evalObj.player2.threeCompletionSpots;
+        }
+        for (spot in eval.CSDeductions) {
+          evalObj.player1.CSDeductions.spot = eval.CSDeductions[spot];
+        }
+        if (eval.win) {
+          evalObj.player2.win = true;
+        }
+      }
+    }
+    return evalObj;
   }
 }
 
