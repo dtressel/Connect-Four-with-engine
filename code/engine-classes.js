@@ -64,28 +64,29 @@ const posIdKey = {
 // 2: the player is making a threat, or the opponent will be able to win on next move
 // 3: the player is winning with this move, or error if in opponent's list
 const lineScoreKey = {
-  _1c: {score: 1.5, flag: null},
-  _1o2: {score: 2, flag: null},
-  _1o3: {score: 2.5, flag: null},
-  _1o4: {score: 3, flag: null},
-  _2c: {score: 3, flag: null},
-  _2o2: {score: 4.5, flag: null},
+  _1c: {score: 1.5},
+  _1o2: {score: 2},
+  _1o3: {score: 2.5},
+  _1o4: {score: 3},
+  _2c: {score: 3},
+  _2o2: {score: 4.5},
   _2o2a: {score: 4.5, flag: 1},
-  _2o3: {score: 6, flag: null},
+  _2o3: {score: 6},
   _2o3a: {score: 6, flag: 1},
-  _3ca: {score: 6, flag: 2}, /* same as 3v */
-  _3cu: {score: 9, flag: null}, /* half as 3oa0 */
-  _3oa0: {score: 18, flag: null}, /* twice as 3cu */
-  _3oa1: {score: 15, flag: 2},
-  _3oa2: {score: 54, flag: 2},
+  _3ca: {score: 6, flag: 2, three: true}, /* same as 3v */
+  _3cu: {score: 9, three: true}, /* half as 3oa0 */
+  _3oa0: {score: 18, three: true}, /* twice as 3cu */
+  _3oa1: {score: 15, flag: 2, three: true},
+  _3oa2: {score: 54, flag: 2, three: true},
   _4: {score: 255, flag: 3},
-  _1v: {score: 1, flag: null},
-  _2v: {score: 2, flag: null},
-  _3v: {score: 6, flag: 2} /* same as 3ca */
+  _0v: {score: 0},
+  _1v: {score: 1},
+  _2v: {score: 2},
+  _3v: {score: 6, flag: 2, three: true} /* same as 3ca */
 };
 
 class idToPatterns {
-  findBottomSpace(char) {
+  static findBottomSpace(char) {
     if (char === 'a') {
       return 0;
     }
@@ -96,7 +97,7 @@ class idToPatterns {
     return 1;
   }
 
-  findMiddleSpace(char) {
+  static findMiddleSpace(char) {
     if (char < 'd') {
       return 0;
     }
@@ -107,7 +108,7 @@ class idToPatterns {
     return 2;
   }
 
-  findTopSpace(char) {
+  static findTopSpace(char) {
     if (char < 'h') {
       return 0;
     }
@@ -117,32 +118,148 @@ class idToPatterns {
     return 1;
   }
 
-  isBottomSpaceEmpty(char) {
+  static isBottomSpaceEmpty(char) {
     return char === 'a';
   }
-  isBottomSpace1(char) {
+  static isBottomSpace1(char) {
     return !(char.charCodeAt() % 2);
   }
-  isBottomSpace2(char) {
+  static isBottomSpace2(char) {
     return !!(char.charCodeAt() % 2) && char !== 'a';
   }
-  isMiddleSpaceEmpty(char) {
+  static isMiddleSpaceEmpty(char) {
     return char < 'd';
   }
-  isMiddleSpace1(char) {
+  static isMiddleSpace1(char) {
     return char > 'c' && !!(char.charCodeAt() % 4 < 2);
   }
-  isMiddleSpace2(char) {
+  static isMiddleSpace2(char) {
     return char > 'c' && !(char.charCodeAt() % 4 < 2);
   }
-  isTopSpaceEmpty(char) {
+  static isTopSpaceEmpty(char) {
     return char < 'h';
   }
-  isTopSpace1(char) {
+  static isTopSpace1(char) {
     return char > 'g' && char < 'l';
   }
-  isTopSpace2(char) {
+  static isTopSpace2(char) {
     return char > 'k';
+  }
+}
+
+class verticalEval {
+  /* creates an array
+      [
+        {(player 1 object)
+          scoreTotal: <num>, 
+          threes: [<type>, <score>, <CompletionSpot>], 
+          completionSpots: [<spot1>, <spot2>...]
+        },
+        {(player 2 object)
+          scoreTotal: <num>, 
+          threes: [<type>, <score>, <CompletionSpot>], 
+          completionSpots: [<spot1>, <spot2>...]
+        }
+      ]
+  */
+  constructor(posId) {
+    this.posId = posId;
+    // this.columnIds = this.getColumnsIds();
+    this.columnEvals = this.getcolumnEvals();
+  }
+
+  EvaluateAll() {
+    // create a column posId for each column
+    let columnIds = this.getColumnsIds();
+    // get an Evaluation object from each vertical
+    for (let i = 0; i < columnIds.length; i++) {
+      let columnEval = EvaluateOne(columnIds[i], i);
+    }
+
+  }
+
+  getColumnIds(posId) {
+    let columnIds = [];
+    for (let i = 0; i < columns; i++) {
+      let columnId = '';
+      // get id letters from first through last corresponding index
+      for (let j = i; j < posId.length; j += columns) {
+        columnId += posId[j];
+      }
+      columnIds.push(columnId);
+    }
+    return columnIds;
+  }
+
+  EvaluateOne(columnId, xPos) {
+    let topMostChain = {player: 0, yPosOfTopPiece: rows - 1};
+    for (i = columnId.length - 1; i >= 0; i--) {
+      // check top space
+      if (columnId[i] < 'h') {
+        topMostChain.yPosOfTopPiece--;
+      } else {
+        const player = idToPatterns.findTopSpace(columnId[i]);
+        if (!topMostChain.player) {
+          topMostChain.player = player;
+          topMostChain.numInARow = 1;
+        } else if (topMostChain.player === player) {
+          topMostChain.numInARow++;
+        } else {
+          break;
+        }
+      }
+      // check middle space
+      if (columnId[i] < 'd') {
+        topMostChain.yPosOfTopPiece--;  
+      } else {
+        const player = idToPatterns.findMiddleSpace(columnId[i]);
+        if (!topMostChain.player) {
+          topMostChain.player = player;
+          topMostChain.numInARow = 1;
+        } else if (topMostChain.player === player) {
+          topMostChain.numInARow++;
+        } else {
+          break;
+        }
+      }
+      // check bottom space
+      if (columnId[i] === 'a') {
+        topMostChain.yPosOfTopPiece--;  
+      } else {
+        const player = idToPatterns.findBottomSpace(columnId[i]);
+        if (!topMostChain.player) {
+          topMostChain.player = player;
+          topMostChain.numInARow = 1;
+        } else if (topMostChain.player === player) {
+          topMostChain.numInARow++;
+        } else {
+          break;
+        }
+      }
+    }
+    // check if completion possible
+    if ((4 - topMostChain.numInARow + topMostChain.yPosOfTopPiece) >= rows) {
+      // 'player: 0' will indicate a column with no score for either players
+      // either because of an empty column or a column with no potential win
+      return {player: 0};
+    }
+    // Build Return Object
+    let returnObj;
+    if (topMostChain.numInARow === 4) {
+      returnObj = {...lineScoreKey._4};
+    } else {
+      returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
+    }
+    returnObj.player = topMostChain.player;
+    if (returnObj.three) {
+      returnObj.completionSpot = `${xPos}${topMostChain.yPosOfTopPiece + 1}`;
+    } else {
+      // find required spots and change in score if one is another's completion spot
+      for (let i = 1; i <= 4 - topMostChain.numInARow; i++) {
+        returnObj[`_${xPos}${topMostChain.yPosOfTopPiece + i}`] = -returnObj.score;
+      }
+    }
+    return returnObj;
   }
 }
 
