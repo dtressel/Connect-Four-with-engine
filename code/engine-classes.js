@@ -86,7 +86,8 @@ const lineScoreKey = {
 };
 
 class idToPatterns {
-  static findBottomSpace(char) {
+  // find Bottom space
+  static find0Space(char) {
     if (char === 'a') {
       return 0;
     }
@@ -97,7 +98,8 @@ class idToPatterns {
     return 1;
   }
 
-  static findMiddleSpace(char) {
+  // find middle space
+  static find1Space(char) {
     if (char < 'd') {
       return 0;
     }
@@ -108,7 +110,8 @@ class idToPatterns {
     return 2;
   }
 
-  static findTopSpace(char) {
+  // find top space
+  static find2Space(char) {
     if (char < 'h') {
       return 0;
     }
@@ -147,7 +150,7 @@ class idToPatterns {
   }
 }
 
-class verticalEval {
+class Eval {
   /* creates an array
       [
         {(player 1 object)
@@ -162,18 +165,96 @@ class verticalEval {
         }
       ]
   */
-  constructor(posId) {
+  constructor(posId, rows, columns) {
     this.posId = posId;
+    this.rows = rows;
+    this.columns = columns;
+    this.horizontals = this.getHorizontals();
   }
 
-  EvaluateAll() {
+  getHorizontals() {
+    const horizontals = [];
+    for (let i = 0; i < this.rows; i++) {
+      const stackNum = Math.floor(i / 3);
+      // positionInStack: 0 for bottom, 1 for middle, 2 for top
+      const positionInStack = i - 3 * stackNum;
+      const posIdStartIndex = stackNum * this.columns;
+      const rowArr = [];
+      for (let j = posIdStartIndex; j < this.columns + posIdStartIndex; j++) {
+        rowArr.push(idToPatterns[`find${positionInStack}Space`](this.posId[j]));
+      }
+      horizontals.push(rowArr);
+    }
+    return horizontals;
+  }
+
+  EvaluateHorsDiags() {
+    // make arrays of uphill diagonals
+    let diagonalsup = this.getDiagonalsUp();
+    // make arrays of downhill diagonals
+    let diagonalsdown = this.getDiagonalsDown();
+    // combine arrays
+    let combined = [...this.horizontals, ...diagonalsup, ...diagonalsdown];
+
+
+  }
+
+  getDiagonalsUp() {
+    const diagonalsUp = [];
+    // create array of diagonals starting with left column spaces moving down
+    for (let i = this.rows - 4; i >= 0; i--) {
+      const diagonal = [];
+      const numOfSpaces = this.columns < this.rows - i ? this.columns : this.rows - i;
+      for (let j = 0; j < numOfSpaces; j++) {
+        diagonal.push(this.horizontals[i + j][j]);
+      }
+      diagonalsUp.push(diagonal);
+    }
+    // add to array of diagonals starting with bottom row spaces moving right
+    for (let i = 1; i < columns - 3; i++) {
+      let diagonal = [];
+      const numOfSpaces = this.rows < this.columns - i ? this.rows : this.columns - i;
+      for (let j = 0; j < numOfSpaces; j++) {
+        diagonal.push(this.horizontals[j][i + j]);
+      }
+      diagonalsUp.push(diagonal);
+    }
+    return diagonalsUp;
+  }
+
+  getDiagonalsDown() {
+    const diagonalsDown = [];
+    // create array of diagonals starting with left column spaces moving up
+    for (let i = 3; i < rows; i++) {
+      const diagonal = [];
+      const numOfSpaces = this.columns < i + 1 ? this.columns : i + 1;
+      for (let j = 0; j < numOfSpaces; j++) {
+        diagonal.push(this.horizontals[i - j][j]);
+      }
+      diagonalsDown.push(diagonal);
+    }
+    // add to array of diagonals starting with top row spaces moving right
+    for (let i = 1; i < columns - 3; i++) {
+      let diagonal = [];
+      const numOfSpaces = this.rows < this.columns - i ? this.rows : this.columns - i;
+      for (let j = 0; j < numOfSpaces; j++) {
+        diagonal.push(this.horizontals[rows - 1 - j][i + j]);
+      }
+      diagonalsDown.push(diagonal);
+    }
+    return diagonalsDown;
+  }
+
+  EvaluateVerticals() {
     // create a column posId for each column
-    let columnIds = this.getColumnsIds();
+    let columnIds = this.getColumnIds();
+
     // get an Evaluation object from each vertical
     const columnEvals = []; 
     for (let i = 0; i < columnIds.length; i++) {
       columnEvals.push(EvaluateOne(columnIds[i], i));
     }
+
     // combine into single object
     const columnEvalObj = combineColumnEvals(columnEvals);
     return columnEvalObj;
@@ -181,10 +262,10 @@ class verticalEval {
 
   getColumnIds(posId) {
     let columnIds = [];
-    for (let i = 0; i < columns; i++) {
+    for (let i = 0; i < this.columns; i++) {
       let columnId = '';
       // get id letters from first through last corresponding index
-      for (let j = i; j < posId.length; j += columns) {
+      for (let j = i; j < posId.length; j += this.columns) {
         columnId += posId[j];
       }
       columnIds.push(columnId);
@@ -205,7 +286,7 @@ class verticalEval {
           win: <true> *optional
         } 
     */
-    let topMostChain = {player: 0, yPosOfTopPiece: rows - 1};
+    let topMostChain = {player: 0, yPosOfTopPiece: this.rows - 1};
 
     // Loop through all characters in ColumnId (last character first)
     for (i = columnId.length - 1; i >= 0; i--) {
@@ -213,7 +294,7 @@ class verticalEval {
       if (columnId[i] < 'h') {
         topMostChain.yPosOfTopPiece--;
       } else {
-        const player = idToPatterns.findTopSpace(columnId[i]);
+        const player = idToPatterns.find2Space(columnId[i]);
         if (!topMostChain.player) {
           topMostChain.player = player;
           topMostChain.numInARow = 1;
@@ -227,7 +308,7 @@ class verticalEval {
       if (columnId[i] < 'd') {
         topMostChain.yPosOfTopPiece--;  
       } else {
-        const player = idToPatterns.findMiddleSpace(columnId[i]);
+        const player = idToPatterns.find1Space(columnId[i]);
         if (!topMostChain.player) {
           topMostChain.player = player;
           topMostChain.numInARow = 1;
@@ -241,7 +322,7 @@ class verticalEval {
       if (columnId[i] === 'a') {
         topMostChain.yPosOfTopPiece--;  
       } else {
-        const player = idToPatterns.findBottomSpace(columnId[i]);
+        const player = idToPatterns.find0Space(columnId[i]);
         if (!topMostChain.player) {
           topMostChain.player = player;
           topMostChain.numInARow = 1;
@@ -254,7 +335,7 @@ class verticalEval {
     }
 
     // check if completion possible
-    if ((4 - topMostChain.numInARow + topMostChain.yPosOfTopPiece) >= rows) {
+    if ((4 - topMostChain.numInARow + topMostChain.yPosOfTopPiece) >= this.rows) {
       // 'player: 0' will indicate a column with no score for either players
       // either because of an empty column or a column with no potential win
       return {player: 0};
@@ -317,33 +398,33 @@ class verticalEval {
         CSDeductions: {},
       }
     }
-    for (eval of evals) {
-      if (eval.player === 1) {
-        evalObj.player1.score += eval.score;
-        if (eval.flag) {
-          evalObj.player1.flags.push(eval.flag);
+    for (ev of evals) {
+      if (ev.player === 1) {
+        evalObj.player1.score += ev.score;
+        if (ev.flag) {
+          evalObj.player1.flags.push(ev.flag);
         }
-        if (eval.threeCompletionSpot) {
+        if (ev.threeCompletionSpot) {
           evalObj.player1.threeCompletionSpots;
         }
-        for (spot in eval.CSDeductions) {
-          evalObj.player1.CSDeductions.spot = eval.CSDeductions[spot];
+        for (spot in ev.CSDeductions) {
+          evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
         }
-        if (eval.win) {
+        if (ev.win) {
           evalObj.player1.win = true;
         }
-      } else if (eval.player === 2) {
-        evalObj.player2.score += eval.score;
-        if (eval.flag) {
-          evalObj.player2.flags.push(eval.flag);
+      } else if (ev.player === 2) {
+        evalObj.player2.score += ev.score;
+        if (ev.flag) {
+          evalObj.player2.flags.push(ev.flag);
         }
-        if (eval.threeCompletionSpot) {
+        if (ev.threeCompletionSpot) {
           evalObj.player2.threeCompletionSpots;
         }
-        for (spot in eval.CSDeductions) {
-          evalObj.player1.CSDeductions.spot = eval.CSDeductions[spot];
+        for (spot in ev.CSDeductions) {
+          evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
         }
-        if (eval.win) {
+        if (ev.win) {
           evalObj.player2.win = true;
         }
       }
