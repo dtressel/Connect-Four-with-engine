@@ -70,19 +70,19 @@ const lineScoreKey = {
   _1o4: {score: 3},
   _2c: {score: 3},
   _2o2: {score: 4.5},
-  _2o2a: {score: 4.5, flag: 1},
+  _2o2a: {score: 4.5, flags: [1]},
   _2o3: {score: 6},
-  _2o3a: {score: 6, flag: 1},
-  _3ca: {score: 6, flag: 2, three: true}, /* same as 3v */
+  _2o3a: {score: 6, flags: [1]},
+  _3ca: {score: 6, flags: [2], three: true}, /* same as 3v */
   _3cu: {score: 9, three: true}, /* half as 3oa0 */
   _3oa0: {score: 18, three: true}, /* twice as 3cu */
-  _3oa1: {score: 15, flag: 2, three: true},
-  _3oa2: {score: 54, flag: 2, three: true},
-  _4: {score: 255, flag: 3},
+  _3oa1: {score: 15, flags: [2], three: true},
+  _3oa2: {score: 54, flags: [2, 2], three: true},
+  _4: {score: 255, flags: 3, win: true},
   _0v: {score: 0},
   _1v: {score: 1},
   _2v: {score: 2},
-  _3v: {score: 6, flag: 2, three: true} /* same as 3ca */
+  _3v: {score: 6, flags: 2, three: true} /* same as 3ca */
 };
 
 class idToPatterns {
@@ -188,17 +188,172 @@ class Eval {
     return horizontals;
   }
 
-  EvaluateHorsDiags() {
-    // make arrays of uphill diagonals
-    let diagonalsup = this.getDiagonalsUp();
-    // make arrays of downhill diagonals
-    let diagonalsdown = this.getDiagonalsDown();
-    // combine arrays
-    let combined = [...this.horizontals, ...diagonalsup, ...diagonalsdown];
-
-
+  evaluateHorizontals() {
+    // {player: 1 or 2, startPos: xy, sequence: []}
+    const breakdown = this.breakDownHorizontals([...this.horizontals]);
+    console.log(breakdown);
+    const horizontalEvals = [];
+    for (const inst of breakdown) {
+      horizontalEvals.push(this.evaluateOneHorInst(inst));
+    }
   }
 
+  evaluateOneHorInst(inst) {
+    /* 
+      inst = {player: 1 or 2, startPos: xy, sequence: []}
+
+      Returns an object:
+      {
+        player: <0, 1, or 2>
+        score: <score> *optional
+        flags: [<1, 2, or 3>, ...] *optional
+        threeCompletionSpots: [<xPos><yPos>, ...] *optional
+        CSDeductions: {
+          _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+        }
+        win: <true> *optional
+      } 
+    */
+    let returnObj = {player: inst.player}
+    // find empty spots
+    const emptySpots = []
+    for (let i = 0; i < inst.length; i++) {
+      if (!inst.sequence[i]) {
+        emptySpots.push(`${inst.startPos[0] + i}${inst.startPos[1]}`);
+      }
+    }
+    const numOfPieces = inst.length - emptySpots.length;
+
+    if (inst.sequence.length === 4) {
+      if (numOfPieces < 3) {
+        returnObj = {...returnObj, ...lineScoreKey[`_${numOfPieces}c`]};
+        returnObj.CSDeductions = {};
+        for (const spot of emptySpots) {
+          returnObj.CSDeductions[`_${spot}`] = -returnObj.score;
+        }
+      }
+      else if (numOfPieces === 4) {
+        returnObj = {...returnObj, ...lineScoreKey._4};
+      }
+      else {
+        // if not bottom row and the spot below empty spot is filled
+        if (+emptySpots[0][1] && this.horizontals[emptySpots[0][1] - 1][emptySpots[0][0]] !== '0') {
+          returnObj = {...returnObj, ...lineScoreKey._3ca};
+        } else {
+          returnObj = {...returnObj, ...lineScoreKey._3cu};
+        }
+        returnObj.threeCompletionSpots = [emptySpots[0]];
+      }
+    }
+    else {
+      // find number of spots filled in each group of 4
+      // numFilled = the number of spots filled by pieces in each 4 chain
+      // maxFilled = the maximum number of spots filled in any of the 4 chains
+      // maxIndexes = the indexes of the 4 chains that are maxFilled
+      const numFilled = [];
+      for (let i = 0; i < inst.sequence.length - 3; i++) {
+        numFilled.push(inst.sequence.slice(i, i + 4).reduce((accum, curr) => curr + accum));
+      }
+      const maxFilled = Math.max(...numFilled);
+      const maxIndexes = numFilled.reduce((accum, curr, index) => {
+        if (curr === maxFilled) accum.push(index);
+      }, []);
+
+      if (maxFilled > 2) {
+        if (maxFilled === 4) {
+          returnObj = {...returnObj, ...lineScoreKey._4};
+        } 
+        else {
+          // if close-ended
+          if (maxIndexes.length === 1) {
+            // check if available
+            const startIndexOfChain = maxIndexes[0];
+            const emptyIndexWithinChain = inst.sequence.slice(startIndexOfChain, startIndexOfChain + 4).indexOf(0);
+            // coordinates of completion spot
+            const x = inst.startPos[0] + startIndexOfChain + emptyIndexWithinChain;
+            const y = inst.startPos[1];
+            if (this.horizontals[y - 1][x]) {
+              returnObj = {...returnObj, ...lineScoreKey._3ca};
+            }
+            else {
+              returnObj = {...returnObj, ...lineScoreKey._3cu};
+            }
+            returnObj.threeCompletionSpots = [`${x}${y}`];
+          }
+          // close off and evaluate remainder
+          // ********************* TODO ***********************
+        }
+      } 
+      // if open-ended or two distinct or overlapping threes
+      else if (maxIndexes.length === 2) {
+        // if open-ended
+        if (+(maxIndexes[1] - maxIndexes[0]) === 1 && inst.sequence[maxIndexes[0]] === 0) {
+          // find completion spots
+          const x1 = inst.startPos[0] + maxIndexes[0];
+          const x2 = x1 + 4;
+          const y = inst.startPos[1];
+          returnObj.threeCompletionSpots = [`${x1}${y}`, `${x2}${y}`];
+          // find number available
+          let available = 0;
+          if (this.horizontals[y - 1][x1]) {
+            available++;
+          }
+          if (this.horizontals[y - 1][x2]) {
+            available++;
+          }
+          returnObj = {...returnObj, ...lineScoreKey[`_3oa${available}`]};
+          // close off and evaluate remainder
+          // ********************* TODO ***********************
+        }
+        // analyze two distinct and two overlapping cases
+      }
+    }
+  }
+
+  breakDownHorizontals(arrOfArrs) {
+    const breakdown = [];
+    const check = (sequence) => {
+      return sequence.length >= 4 && sequence.reduce((accum, curr) => curr + accum) > 0;
+    }
+    for (let i = 0; i < arrOfArrs.length; i++) {
+      let player1Builder = {player: 1, startPos: `0${i}`, sequence: []};
+      let player2Builder = {player: 2, startPos: `0${i}`, sequence: []};
+      for (let j = 0; j < arrOfArrs[i].length; j++) {
+        const sVal = arrOfArrs[i][j];
+        if (sVal === 0) {
+          player1Builder.sequence.push(sVal);
+          player2Builder.sequence.push(sVal);
+        } else if (sVal === 1) {
+          player1Builder.sequence.push(sVal);
+          if (check(player2Builder.sequence)) {
+            breakdown.push(player2Builder);
+          }
+          player2Builder = {player: 2, startPos: `${j + 1}${i}`, sequence: []};
+        } else {
+          player2Builder.sequence.push(sVal);
+          if (check(player1Builder.sequence)) {
+            breakdown.push(player1Builder);
+          }
+          player1Builder = {player: 1, startPos: `${j + 1}${i}`, sequence: []};
+        }
+      }
+      if (check(player1Builder.sequence)) {
+        breakdown.push(player1Builder);
+      }
+      if (check(player2Builder.sequence)) {
+        breakdown.push(player2Builder);
+      }
+    }
+    return breakdown;
+  }
+
+  evaluateDiagonalsUp() {
+    // make arrays of uphill diagonals
+    const diagonalsUp = this.getDiagonalsUp();
+    const breakdown = this.breakDownDiagonalsUp(diagonalsUp);
+    console.log(breakdown);
+  }
+  
   getDiagonalsUp() {
     const diagonalsUp = [];
     // create array of diagonals starting with left column spaces moving down
@@ -220,6 +375,63 @@ class Eval {
       diagonalsUp.push(diagonal);
     }
     return diagonalsUp;
+  }
+
+  breakDownDiagonalsUp(arrOfArrs) {
+    const breakdown = [];
+    // gets coordinates based off of normal order of diagonals
+    const getCoordinates = (i, j) => {
+      let x;
+      let y;
+      if (i < rows - 3) {
+        x = j;
+        y = rows - 4 - i + j;
+      } else {
+        x = i + 4 - rows + j;
+        y = j;
+      }
+      return `${x}${y}`;
+    }
+    const check = (sequence) => {
+      return sequence.length >= 4 && sequence.reduce((accum, curr) => curr + accum) > 0;
+    }
+    for (let i = 0; i < arrOfArrs.length; i++) {
+      let player1Builder = {player: 1, startPos: getCoordinates(i, 0), sequence: []};
+      let player2Builder = {player: 2, startPos: getCoordinates(i, 0), sequence: []};
+      for (let j = 0; j < arrOfArrs[i].length; j++) {
+        const sVal = arrOfArrs[i][j];
+        if (sVal === 0) {
+          player1Builder.sequence.push(sVal);
+          player2Builder.sequence.push(sVal);
+        } else if (sVal === 1) {
+          player1Builder.sequence.push(sVal);
+          if (check(player2Builder.sequence)) {
+            breakdown.push(player2Builder);
+          }
+          player2Builder = {player: 2, startPos: getCoordinates(i, j), sequence: []};
+        } else {
+          player2Builder.sequence.push(sVal);
+          if (check(player1Builder.sequence)) {
+            breakdown.push(player1Builder);
+          }
+          player1Builder = {player: 1, startPos: getCoordinates(i, j), sequence: []};
+        }
+      }
+      if (check(player1Builder.sequence)) {
+        breakdown.push(player1Builder);
+      }
+      if (check(player2Builder.sequence)) {
+        breakdown.push(player2Builder);
+      }
+    }
+    return breakdown;
+  }
+
+  evaluateDiagonalsDown() {
+    // make arrays of downhill diagonals
+    const diagonalsDown = this.getDiagonalsDown();
+    const breakdown = this.breakDownDiagonalsDown(diagonalsDown);
+    console.log(breakdown);
   }
 
   getDiagonalsDown() {
@@ -245,14 +457,89 @@ class Eval {
     return diagonalsDown;
   }
 
-  EvaluateVerticals() {
+  breakDownDiagonalsDown(arrOfArrs) {
+    const breakdown = [];
+    // gets coordinates based off of normal order of diagonals
+    const getCoordinates = (i, j) => {
+      let x;
+      let y;
+      if (i < rows - 3) {
+        x = j;
+        y = i + 3 - j;
+      } else {
+        x = i + 4 - rows + j;
+        y = rows - 1 - j;
+      }
+      return `${x}${y}`;
+    }
+    const check = (sequence) => {
+      return sequence.length >= 4 && sequence.reduce((accum, curr) => curr + accum) > 0;
+    }
+    for (let i = 0; i < arrOfArrs.length; i++) {
+      let player1Builder = {player: 1, startPos: getCoordinates(i, 0), sequence: []};
+      let player2Builder = {player: 2, startPos: getCoordinates(i, 0), sequence: []};
+      for (let j = 0; j < arrOfArrs[i].length; j++) {
+        const sVal = arrOfArrs[i][j];
+        if (sVal === 0) {
+          player1Builder.sequence.push(sVal);
+          player2Builder.sequence.push(sVal);
+        } else if (sVal === 1) {
+          player1Builder.sequence.push(sVal);
+          if (check(player2Builder.sequence)) {
+            breakdown.push(player2Builder);
+          }
+          player2Builder = {player: 2, startPos: getCoordinates(i, j), sequence: []};
+        } else {
+          player2Builder.sequence.push(sVal);
+          if (check(player1Builder.sequence)) {
+            breakdown.push(player1Builder);
+          }
+          player1Builder = {player: 1, startPos: getCoordinates(i, j), sequence: []};
+        }
+      }
+      if (check(player1Builder.sequence)) {
+        breakdown.push(player1Builder);
+      }
+      if (check(player2Builder.sequence)) {
+        breakdown.push(player2Builder);
+      }
+    }
+    return breakdown;
+  }
+
+  evaluateOneHorDiag(arr) {
+    /* 
+      Returns an array:
+      [
+        {
+          player: <0, 1, or 2>
+          score: <score> *optional
+          flags: [<1, 2, or 3>, ...] *optional
+          threeCompletionSpots: [<xPos><yPos>, ...] *optional
+          CSDeductions: {
+            _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+          }
+          win: <true> *optional
+        },
+        {
+          ...possibly multiple objects with same structure as above
+        } 
+      ]      
+    */
+    const returnArr = [];
+    let player1builder = [];
+    let player2builder = [];
+
+  }
+
+  evaluateVerticals() {
     // create a column posId for each column
     let columnIds = this.getColumnIds();
 
     // get an Evaluation object from each vertical
     const columnEvals = []; 
     for (let i = 0; i < columnIds.length; i++) {
-      columnEvals.push(EvaluateOne(columnIds[i], i));
+      columnEvals.push(evaluateOneVert(columnIds[i], i));
     }
 
     // combine into single object
@@ -273,13 +560,13 @@ class Eval {
     return columnIds;
   }
 
-  EvaluateOne(columnId, xPos) {
+  evaluateOneVert(columnId, xPos) {
     /* Returns an object:
         {
           player: <0, 1, or 2>
           score: <score> *optional
-          flag: <1, 2, or 3> *optional
-          threeCompletionSpot: <xPos><yPos> *optional
+          flags: [<1, 2, or 3>, ...] *optional
+          threeCompletionSpots: [<xPos><yPos>, ...] *optional
           CSDeductions: {
             _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
           }
@@ -345,16 +632,15 @@ class Eval {
     let returnObj;
     if (topMostChain.numInARow === 4) {
       returnObj = {...lineScoreKey._4};
-      returnObj.win = true;
     } else if (topMostChain.numInARow === 3) {
       returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
-      returnObj.threeCompletionSpot = `${xPos}${topMostChain.yPosOfTopPiece + 1}`;
+      returnObj.threeCompletionSpots = [`${xPos}${topMostChain.yPosOfTopPiece + 1}`];
     } else {
       returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
     }
     returnObj.player = topMostChain.player;
     returnObj.CSDeductions = {};
-    if (!returnObj.threeCompletionSpot) {
+    if (!returnObj.threeCompletionSpots) {
       // find required spots and change in score if one is another's completion spot
       for (let i = 1; i <= 4 - topMostChain.numInARow; i++) {
         returnObj.CSDeductions[`_${xPos}${topMostChain.yPosOfTopPiece + i}`] = -returnObj.score;
@@ -398,14 +684,14 @@ class Eval {
         CSDeductions: {},
       }
     }
-    for (ev of evals) {
+    for (const ev of evals) {
       if (ev.player === 1) {
         evalObj.player1.score += ev.score;
-        if (ev.flag) {
-          evalObj.player1.flags.push(ev.flag);
+        if (ev.flags) {
+          evalObj.player1.flags.push(...ev.flags);
         }
-        if (ev.threeCompletionSpot) {
-          evalObj.player1.threeCompletionSpots;
+        if (ev.threeCompletionSpots) {
+          evalObj.player1.threeCompletionSpots.push(...ev.threeCompletionSpots);
         }
         for (spot in ev.CSDeductions) {
           evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
@@ -415,11 +701,11 @@ class Eval {
         }
       } else if (ev.player === 2) {
         evalObj.player2.score += ev.score;
-        if (ev.flag) {
-          evalObj.player2.flags.push(ev.flag);
+        if (ev.flags) {
+          evalObj.player2.flags.push(...ev.flags);
         }
-        if (ev.threeCompletionSpot) {
-          evalObj.player2.threeCompletionSpots;
+        if (ev.threeCompletionSpots) {
+          evalObj.player2.threeCompletionSpots.push(...ev.threeCompletionSpots);
         }
         for (spot in ev.CSDeductions) {
           evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
