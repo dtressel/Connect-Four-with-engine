@@ -70,19 +70,16 @@ const lineScoreKey = {
   _1o4: {score: 3},
   _2c: {score: 3},
   _2o2: {score: 4.5},
-  _2o2a: {score: 4.5, flags: [1]},
+  _2o2a: {score: 4.5, flag: 1},
   _2o3: {score: 6},
-  _2o3a: {score: 6, flags: [1]},
-  _3ca: {score: 6, flags: [2], three: true}, /* same as 3v */
-  _3cu: {score: 9, three: true}, /* half as 3oa0 */
-  _3oa0: {score: 18, three: true}, /* twice as 3cu */
-  _3oa1: {score: 15, flags: [2], three: true},
-  _3oa2: {score: 54, flags: [2, 2], three: true},
-  _4: {score: 255, flags: 3, win: true},
+  _2o3a: {score: 6, flag: 1},
+  _3a: {score: 6, flag: 2, three: true},
+  _3u: {score: 9, three: true},
+  _4: {score: 255, flag: 3, win: true},
   _0v: {score: 0},
   _1v: {score: 1},
   _2v: {score: 2},
-  _3v: {score: 6, flags: 2, three: true} /* same as 3ca */
+  _3v: {score: 6, flag: 2, three: true} /* same as 3u */
 };
 
 class idToPatterns {
@@ -192,125 +189,162 @@ class Eval {
     // {player: 1 or 2, startPos: xy, sequence: []}
     const breakdown = this.breakDownHorizontals([...this.horizontals]);
     console.log(breakdown);
-    const horizontalEvals = [];
+    // const horizontalEvals = [];
+    const horizontalEvals = this.evaluateBreakdown(breakdown);
     for (const inst of breakdown) {
       horizontalEvals.push(this.evaluateOneHorInst(inst));
     }
   }
 
-  evaluateOneHorInst(inst) {
+  evaluateBreakdown(breakdown) {
     /* 
+      Returns an array of objects:
+      [
+        {
+          player: <0, 1, or 2>
+          entries: [
+            {
+              score: <score> *optional
+              flag: <1, 2, or 3> *optional
+              threeCompletionSpot: <xPos><yPos> *optional
+              CSDeductions: {
+                _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+              }
+              win: <true> *optional
+            },
+            {
+              ... *may or may not have multiple objects 
+            }
+          ]
+        },
+        {
+          ...
+        }
+      ]
+
       inst = {player: 1 or 2, startPos: xy, sequence: []}
-
-      Returns an object:
-      {
-        player: <0, 1, or 2>
-        score: <score> *optional
-        flags: [<1, 2, or 3>, ...] *optional
-        threeCompletionSpots: [<xPos><yPos>, ...] *optional
-        CSDeductions: {
-          _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
-        }
-        win: <true> *optional
-      } 
     */
-    let returnObj = {player: inst.player}
-    // find empty spots
-    const emptySpots = []
-    for (let i = 0; i < inst.length; i++) {
-      if (!inst.sequence[i]) {
-        emptySpots.push(`${inst.startPos[0] + i}${inst.startPos[1]}`);
-      }
-    }
-    const numOfPieces = inst.length - emptySpots.length;
-
-    if (inst.sequence.length === 4) {
-      if (numOfPieces < 3) {
-        returnObj = {...returnObj, ...lineScoreKey[`_${numOfPieces}c`]};
-        returnObj.CSDeductions = {};
-        for (const spot of emptySpots) {
-          returnObj.CSDeductions[`_${spot}`] = -returnObj.score;
+    for (const inst of breakdown) {
+      const returnObj = {player: inst.player, entries: []};
+      let returnObjEntry;
+      // find empty spots
+      const emptySpots = []
+      for (let i = 0; i < inst.length; i++) {
+        if (!inst.sequence[i]) {
+          emptySpots.push(`${inst.startPos[0] + i}${inst.startPos[1]}`);
         }
       }
-      else if (numOfPieces === 4) {
-        returnObj = {...returnObj, ...lineScoreKey._4};
-      }
-      else {
-        // if not bottom row and the spot below empty spot is filled
-        if (+emptySpots[0][1] && this.horizontals[emptySpots[0][1] - 1][emptySpots[0][0]] !== '0') {
-          returnObj = {...returnObj, ...lineScoreKey._3ca};
-        } else {
-          returnObj = {...returnObj, ...lineScoreKey._3cu};
-        }
-        returnObj.threeCompletionSpots = [emptySpots[0]];
-      }
-    }
-    else {
-      // find number of spots filled in each group of 4
-      // numFilled = the number of spots filled by pieces in each 4 chain
-      // maxFilled = the maximum number of spots filled in any of the 4 chains
-      // maxIndexes = the indexes of the 4 chains that are maxFilled
-      const numFilled = [];
-      for (let i = 0; i < inst.sequence.length - 3; i++) {
-        numFilled.push(inst.sequence.slice(i, i + 4).reduce((accum, curr) => curr + accum));
-      }
-      const maxFilled = Math.max(...numFilled);
-      const maxIndexes = numFilled.reduce((accum, curr, index) => {
-        if (curr === maxFilled) accum.push(index);
-      }, []);
+      const numOfPieces = inst.length - emptySpots.length;
 
-      if (maxFilled > 2) {
-        if (maxFilled === 4) {
-          returnObj = {...returnObj, ...lineScoreKey._4};
-        } 
+      // if instance is only 4 long (simple logic)
+      if (inst.sequence.length === 4) {
+        if (numOfPieces < 3) {
+          returnObjEntry = {...lineScoreKey[`_${numOfPieces}c`]};
+          returnObjEntry.CSDeductions = {};
+          for (const spot of emptySpots) {
+            returnObjEntry.CSDeductions[`_${spot}`] = -returnObjEntry.score;
+          }
+          returnObj.entries.push(returnObjEntry);
+        }
+        else if (numOfPieces === 4) {
+          returnObjEntry = {...lineScoreKey._4};
+          returnObj.entries.push(returnObjEntry);
+        }
         else {
-          // if close-ended
-          if (maxIndexes.length === 1) {
-            // check if available
-            const startIndexOfChain = maxIndexes[0];
-            const emptyIndexWithinChain = inst.sequence.slice(startIndexOfChain, startIndexOfChain + 4).indexOf(0);
-            // coordinates of completion spot
-            const x = inst.startPos[0] + startIndexOfChain + emptyIndexWithinChain;
-            const y = inst.startPos[1];
-            if (this.horizontals[y - 1][x]) {
-              returnObj = {...returnObj, ...lineScoreKey._3ca};
-            }
-            else {
-              returnObj = {...returnObj, ...lineScoreKey._3cu};
-            }
-            returnObj.threeCompletionSpots = [`${x}${y}`];
+          // if not bottom row and the spot below empty spot is filled
+          if (+emptySpots[0][1] && this.horizontals[emptySpots[0][1] - 1][emptySpots[0][0]] !== '0') {
+            returnObjEntry = {...lineScoreKey._3a};
+          } else {
+            returnObjEntry = {...lineScoreKey._3u};
           }
-          // close off and evaluate remainder
-          // ********************* TODO ***********************
+          returnObjEntry.threeCompletionSpot = emptySpots[0];
+          returnObj.entries.push(returnObjEntry);
         }
-      } 
-      // if open-ended or two distinct or overlapping threes
-      else if (maxIndexes.length === 2) {
-        // if open-ended
-        if (+(maxIndexes[1] - maxIndexes[0]) === 1 && inst.sequence[maxIndexes[0]] === 0) {
-          // find completion spots
-          const x1 = inst.startPos[0] + maxIndexes[0];
-          const x2 = x1 + 4;
-          const y = inst.startPos[1];
-          returnObj.threeCompletionSpots = [`${x1}${y}`, `${x2}${y}`];
-          // find number available
-          let available = 0;
-          if (this.horizontals[y - 1][x1]) {
-            available++;
-          }
-          if (this.horizontals[y - 1][x2]) {
-            available++;
-          }
-          returnObj = {...returnObj, ...lineScoreKey[`_3oa${available}`]};
-          // close off and evaluate remainder
-          // ********************* TODO ***********************
+      }
+
+      // if instance is more than 4 long (more complicated logic)
+      else {
+        // find number of spots filled in each group of 4
+        // numFilled = the number of spots filled by pieces in each 4 chain
+        // maxFilled = the maximum number of spots filled in any of the 4 chains
+        // maxIndexes = the indexes of the 4 chains that are maxFilled
+        const numFilled = [];
+        for (let i = 0; i < inst.sequence.length - 3; i++) {
+          numFilled.push(inst.sequence.slice(i, i + 4).reduce((accum, curr) => curr + accum));
         }
-        // analyze two distinct and two overlapping cases
+        const maxFilled = Math.max(...numFilled);
+        const maxIndexes = numFilled.reduce((accum, curr, index) => {
+          if (curr === maxFilled) return [...accum, index];
+        }, []);
+
+        // if there is a 3 or 4
+        if (maxFilled > 2) {
+          // if maxFilled is a 4, short circuit
+          if (maxFilled === 4) {
+            returnObjEntry = {...lineScoreKey._4};
+            returnObj.entries.push(returnObjEntry);
+          }
+          // if maxFilled is a 3
+          else {
+            // *************** New Stuff here
+            // for each three, find completion spot
+            const completionSpots = new Set();
+            // find inst indexes of completion spots for close off and re-evaluate
+            const completionSpotsInstIndexes = new Set();
+            for (const index of maxIndexes) {
+              const emptyIndexWithin = inst.sequence.slice(index, index + 4).reduce((accum, curr, index) => {
+                return curr ? accum : index;
+              });
+              const x = inst.startPos[0] + index + emptyIndexWithin;
+              const y = inst.startPos[1];
+              completionSpots.add(`${x}${y}`);
+              completionSpotsInstIndexes.add(index + emptyIndexWithin);
+            }
+            // for each completion spot, find if available and create return array entry
+            for (const spot of completionSpots) {
+              // Is completion spot available (not 0)?
+              returnObjEntry = this.horizontals[spot[1] - 1][spot[0]] ? 
+                {...lineScoreKey._3a} : {...lineScoreKey._3u};
+              returnObjEntry.threeCompletionSpot = spot;
+              returnObj.entries.push(returnObjEntry);
+            }
+            // close off and evaluate remainder
+            for (const index of completionSpotsInstIndexes) {
+              // fill in completion spots with opposite player's piece
+              inst.sequence[index] = (inst.player - 3) * -1;
+              // create new breakdown objects of remainder
+              const newBreakdown = this.breakDownHorizontals([inst.sequence]);
+              // add any new breakdown objects to the breakdown passed array to be evaluated later
+              for (const newBreakdownInst of newBreakdown) {
+                // alter start position of x
+                newBreakdownInst.startPos = 
+                  `${inst.startPos[0] + newBreakdownInst.startPos[0]}${inst.startPos[1]}`;
+                breakdown.push(newBreakdownInst);
+              }
+            }
+          }
+        }
+        // if maxFilled is 2
+        else if (maxFilled === 2) {
+
+        }
+        // if maxFilled is 1
+        else {
+
+        }
       }
     }
   }
 
   breakDownHorizontals(arrOfArrs) {
+    /* 
+      Returns an array of breakdown objects.
+      A single array can result in multiple breakdown objects
+      [
+        {player: 1 or 2, startPos: xy, sequence: []},
+        {...}, ...
+      ]
+    */
     const breakdown = [];
     const check = (sequence) => {
       return sequence.length >= 4 && sequence.reduce((accum, curr) => curr + accum) > 0;
@@ -514,8 +548,8 @@ class Eval {
         {
           player: <0, 1, or 2>
           score: <score> *optional
-          flags: [<1, 2, or 3>, ...] *optional
-          threeCompletionSpots: [<xPos><yPos>, ...] *optional
+          flag: <1, 2, or 3> *optional
+          threeCompletionSpot: <xPos><yPos> *optional
           CSDeductions: {
             _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
           }
@@ -565,8 +599,8 @@ class Eval {
         {
           player: <0, 1, or 2>
           score: <score> *optional
-          flags: [<1, 2, or 3>, ...] *optional
-          threeCompletionSpots: [<xPos><yPos>, ...] *optional
+          flag: <1, 2, or 3> *optional
+          threeCompletionSpot: <xPos><yPos> *optional
           CSDeductions: {
             _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
           }
@@ -634,13 +668,13 @@ class Eval {
       returnObj = {...lineScoreKey._4};
     } else if (topMostChain.numInARow === 3) {
       returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
-      returnObj.threeCompletionSpots = [`${xPos}${topMostChain.yPosOfTopPiece + 1}`];
+      returnObj.threeCompletionSpot = `${xPos}${topMostChain.yPosOfTopPiece + 1}`;
     } else {
       returnObj = {...lineScoreKey[`_${topMostChain.numInARow}v`]};
     }
     returnObj.player = topMostChain.player;
     returnObj.CSDeductions = {};
-    if (!returnObj.threeCompletionSpots) {
+    if (!returnObj.threeCompletionSpot) {
       // find required spots and change in score if one is another's completion spot
       for (let i = 1; i <= 4 - topMostChain.numInARow; i++) {
         returnObj.CSDeductions[`_${xPos}${topMostChain.yPosOfTopPiece + i}`] = -returnObj.score;
@@ -687,11 +721,11 @@ class Eval {
     for (const ev of evals) {
       if (ev.player === 1) {
         evalObj.player1.score += ev.score;
-        if (ev.flags) {
-          evalObj.player1.flags.push(...ev.flags);
+        if (ev.flag) {
+          evalObj.player1.flags.push(ev.flag);
         }
-        if (ev.threeCompletionSpots) {
-          evalObj.player1.threeCompletionSpots.push(...ev.threeCompletionSpots);
+        if (ev.threeCompletionSpot) {
+          evalObj.player1.threeCompletionSpots.push(ev.threeCompletionSpot);
         }
         for (spot in ev.CSDeductions) {
           evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
@@ -701,11 +735,11 @@ class Eval {
         }
       } else if (ev.player === 2) {
         evalObj.player2.score += ev.score;
-        if (ev.flags) {
-          evalObj.player2.flags.push(...ev.flags);
+        if (ev.flag) {
+          evalObj.player2.flags.push(ev.flag);
         }
-        if (ev.threeCompletionSpots) {
-          evalObj.player2.threeCompletionSpots.push(...ev.threeCompletionSpots);
+        if (ev.threeCompletionSpot) {
+          evalObj.player2.threeCompletionSpots.push(ev.threeCompletionSpot);
         }
         for (spot in ev.CSDeductions) {
           evalObj.player1.CSDeductions.spot = ev.CSDeductions[spot];
@@ -819,3 +853,246 @@ class EvalTreeNode {
 class LinkedListNode {
 
 }
+
+
+// Old code:
+
+// evaluateOneHorInst(inst) {
+//   /* 
+//     inst = {player: 1 or 2, startPos: xy, sequence: []}
+
+//     Returns an array of objects:
+//     [
+//       {
+//         player: <0, 1, or 2>
+//         entries: [
+//           {
+//             score: <score> *optional
+//             flag: <1, 2, or 3> *optional
+//             threeCompletionSpot: <xPos><yPos> *optional
+//             CSDeductions: {
+//               _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+//             }
+//             win: <true> *optional
+//           },
+//           {
+//             ... *may or may not have multiple objects 
+//           }
+//         ]
+//       },
+//       {
+//         ...
+//       }
+//     ]
+//   */
+//   const returnObj = {player: inst.player, entries: []};
+//   let returnObjEntry;
+//   // find empty spots
+//   const emptySpots = []
+//   for (let i = 0; i < inst.length; i++) {
+//     if (!inst.sequence[i]) {
+//       emptySpots.push(`${inst.startPos[0] + i}${inst.startPos[1]}`);
+//     }
+//   }
+//   const numOfPieces = inst.length - emptySpots.length;
+
+//   // if instance is only 4 long (simple logic)
+//   if (inst.sequence.length === 4) {
+//     if (numOfPieces < 3) {
+//       returnObjEntry = {...lineScoreKey[`_${numOfPieces}c`]};
+//       returnObjEntry.CSDeductions = {};
+//       for (const spot of emptySpots) {
+//         returnObjEntry.CSDeductions[`_${spot}`] = -returnObjEntry.score;
+//       }
+//       returnObj.entries.push(returnObjEntry);
+//     }
+//     else if (numOfPieces === 4) {
+//       returnObjEntry = {...lineScoreKey._4};
+//       returnObj.entries.push(returnObjEntry);
+//     }
+//     else {
+//       // if not bottom row and the spot below empty spot is filled
+//       if (+emptySpots[0][1] && this.horizontals[emptySpots[0][1] - 1][emptySpots[0][0]] !== '0') {
+//         returnObjEntry = {...lineScoreKey._3a};
+//       } else {
+//         returnObjEntry = {...lineScoreKey._3u};
+//       }
+//       returnObjEntry.threeCompletionSpot = emptySpots[0];
+//       returnObj.entries.push(returnObjEntry);
+//     }
+//   }
+
+//   // if instance is more than 4 long (more complicated logic)
+//   else {
+//     // find number of spots filled in each group of 4
+//     // numFilled = the number of spots filled by pieces in each 4 chain
+//     // maxFilled = the maximum number of spots filled in any of the 4 chains
+//     // maxIndexes = the indexes of the 4 chains that are maxFilled
+//     const numFilled = [];
+//     for (let i = 0; i < inst.sequence.length - 3; i++) {
+//       numFilled.push(inst.sequence.slice(i, i + 4).reduce((accum, curr) => curr + accum));
+//     }
+//     const maxFilled = Math.max(...numFilled);
+//     const maxIndexes = numFilled.reduce((accum, curr, index) => {
+//       if (curr === maxFilled) return [...accum, index];
+//     }, []);
+
+//     // if there is a 3 or 4
+//     if (maxFilled > 2) {
+//       // if maxFilled is a 4, short circuit
+//       if (maxFilled === 4) {
+//         returnObjEntry = {...lineScoreKey._4};
+//         returnObj.entries.push(returnObjEntry);
+//       }
+//       // if maxFilled is a 3
+//       else {
+//         // *************** New Stuff here
+//         // for each three, find completion spot
+//         const completionSpots = new Set();
+//         // find inst indexes of completion spots for close off and re-evaluate
+//         const completionSpotsInstIndexes = new Set();
+//         for (const index of maxIndexes) {
+//           const emptyIndexWithin = inst.sequence.slice(index, index + 4).reduce((accum, curr, index) => {
+//             return curr ? accum : index;
+//           });
+//           const x = inst.startPos[0] + index + emptyIndexWithin;
+//           const y = inst.startPos[1];
+//           completionSpots.add(`${x}${y}`);
+//           completionSpotsInstIndexes.add(index + emptyIndexWithin);
+//         }
+//         // for each completion spot, find if available and create return array entry
+//         for (const spot of completionSpots) {
+//           // Is completion spot available (not 0)?
+//           returnObjEntry = this.horizontals[spot[1] - 1][spot[0]] ? 
+//             {...lineScoreKey._3a} : {...lineScoreKey._3u};
+//           returnObjEntry.threeCompletionSpot = spot;
+//           returnObj.entries.push(returnObjEntry);
+//         }
+//         // close off and evaluate remainder
+//         // ********************* TODO ***********************
+//         for (const index of completionSpotsInstIndexes) {
+//           // fill in completion spots with opposite player's piece
+//           inst.sequence[index] = (inst.player - 3) * -1;
+//           const newBreakdown = this.breakDownHorizontals([inst.sequence]);
+//           for (const breakdown of newBreakdown) {
+//             breakdown.startPos = `${inst.startPos[0] + breakdown.startPos[0]}${inst.startPos[1]}`;
+
+//           }
+
+//         }
+//       }
+//     } 
+//   }
+// }
+
+// evaluateOneHorInst(inst) {
+//   /* 
+//     inst = {player: 1 or 2, startPos: xy, sequence: []}
+
+//     Returns an object:
+//     {
+//       player: <0, 1, or 2>
+//       score: <score> *optional
+//       flags: [<1, 2, or 3>, ...] *optional
+//       threeCompletionSpots: [<xPos><yPos>, ...] *optional
+//       CSDeductions: {
+//         _<xPos><yPos>: <score deduction> *(0 - 3 of these wildcards)
+//       }
+//       win: <true> *optional
+//     } 
+//   */
+//   let returnObj = {player: inst.player}
+//   // find empty spots
+//   const emptySpots = []
+//   for (let i = 0; i < inst.length; i++) {
+//     if (!inst.sequence[i]) {
+//       emptySpots.push(`${inst.startPos[0] + i}${inst.startPos[1]}`);
+//     }
+//   }
+//   const numOfPieces = inst.length - emptySpots.length;
+
+//   if (inst.sequence.length === 4) {
+//     if (numOfPieces < 3) {
+//       returnObj = {...returnObj, ...lineScoreKey[`_${numOfPieces}c`]};
+//       returnObj.CSDeductions = {};
+//       for (const spot of emptySpots) {
+//         returnObj.CSDeductions[`_${spot}`] = -returnObj.score;
+//       }
+//     }
+//     else if (numOfPieces === 4) {
+//       returnObj = {...returnObj, ...lineScoreKey._4};
+//     }
+//     else {
+//       // if not bottom row and the spot below empty spot is filled
+//       if (+emptySpots[0][1] && this.horizontals[emptySpots[0][1] - 1][emptySpots[0][0]] !== '0') {
+//         returnObj = {...returnObj, ...lineScoreKey._3ca};
+//       } else {
+//         returnObj = {...returnObj, ...lineScoreKey._3cu};
+//       }
+//       returnObj.threeCompletionSpots = [emptySpots[0]];
+//     }
+//   }
+//   else {
+//     // find number of spots filled in each group of 4
+//     // numFilled = the number of spots filled by pieces in each 4 chain
+//     // maxFilled = the maximum number of spots filled in any of the 4 chains
+//     // maxIndexes = the indexes of the 4 chains that are maxFilled
+//     const numFilled = [];
+//     for (let i = 0; i < inst.sequence.length - 3; i++) {
+//       numFilled.push(inst.sequence.slice(i, i + 4).reduce((accum, curr) => curr + accum));
+//     }
+//     const maxFilled = Math.max(...numFilled);
+//     const maxIndexes = numFilled.reduce((accum, curr, index) => {
+//       if (curr === maxFilled) accum.push(index);
+//     }, []);
+
+//     if (maxFilled > 2) {
+//       if (maxFilled === 4) {
+//         returnObj = {...returnObj, ...lineScoreKey._4};
+//       } 
+//       else {
+//         // if close-ended
+//         if (maxIndexes.length === 1) {
+//           // check if available
+//           const startIndexOfChain = maxIndexes[0];
+//           const emptyIndexWithinChain = inst.sequence.slice(startIndexOfChain, startIndexOfChain + 4).indexOf(0);
+//           // coordinates of completion spot
+//           const x = inst.startPos[0] + startIndexOfChain + emptyIndexWithinChain;
+//           const y = inst.startPos[1];
+//           if (this.horizontals[y - 1][x]) {
+//             returnObj = {...returnObj, ...lineScoreKey._3ca};
+//           }
+//           else {
+//             returnObj = {...returnObj, ...lineScoreKey._3cu};
+//           }
+//           returnObj.threeCompletionSpots = [`${x}${y}`];
+//         }
+//         // close off and evaluate remainder
+//         // ********************* TODO ***********************
+//       }
+//     } 
+//     // if open-ended or two distinct or overlapping threes
+//     else if (maxIndexes.length === 2) {
+//       // if open-ended
+//       if (+(maxIndexes[1] - maxIndexes[0]) === 1 && inst.sequence[maxIndexes[0]] === 0) {
+//         // find completion spots
+//         const x1 = inst.startPos[0] + maxIndexes[0];
+//         const x2 = x1 + 4;
+//         const y = inst.startPos[1];
+//         returnObj.threeCompletionSpots = [`${x1}${y}`, `${x2}${y}`];
+//         // find number available
+//         let available = 0;
+//         if (this.horizontals[y - 1][x1]) {
+//           available++;
+//         }
+//         if (this.horizontals[y - 1][x2]) {
+//           available++;
+//         }
+//         returnObj = {...returnObj, ...lineScoreKey[`_3oa${available}`]};
+//         // close off and evaluate remainder
+//         // ********************* TODO ***********************
+//       }
+//       // analyze two distinct and two overlapping cases
+//     }
+//   }
+// }
